@@ -1232,6 +1232,12 @@ vm_getinstancevariable(VALUE obj, ID id, IVC ic)
     return vm_getivar(obj, id, ic, NULL, FALSE);
 }
 
+VALUE
+rb_vm_getinstancevariable(VALUE obj, ID id, IVC ic)
+{
+    return vm_getinstancevariable(obj, id, ic);
+}
+
 static inline void
 vm_setinstancevariable(VALUE obj, ID id, VALUE val, IVC ic)
 {

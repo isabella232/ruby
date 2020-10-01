@@ -503,6 +503,44 @@ void gen_opt_send_without_block(codeblock_t* cb, codeblock_t* ocb, ctx_t* ctx)
     jmp_ptr(cb, side_exit);
 }
 
+VALUE rb_vm_getinstancevariable(VALUE obj, ID id, IVC ic); // in vm_insnhelper.c
+
+void
+gen_getinstancevariable(codeblock_t* cb, codeblock_t* ocb, ctx_t* ctx)
+{
+    // getinstancevariable is not leaf, so write incremented PC before calling
+    // the instruction body which could raise an exception
+    mov(cb, RAX, const_ptr_opnd(ctx->pc + insn_len(BIN(getinstancevariable))));
+    mov(cb, mem_opnd(64, RDI, 0), RAX);
+
+    VALUE id = ctx_get_arg(ctx, 0);
+    VALUE ivc = ctx_get_arg(ctx, 1); // TODO can IVC move? if so we should read this at run time
+
+    // Prepare to making a function call. Preserve cfp and vm stack pointer
+    push(cb, RDI);
+    push(cb, RSI);
+
+    // Setup arguments
+    // First argument is self
+    mov(cb, RDI, mem_opnd(64, RDI, 24));
+    // Second argument is id
+    mov(cb, RSI, imm_opnd(id));
+    // Third argument is ivc
+    mov(cb, RDX, imm_opnd(ivc));
+
+    // Make indirect call. TODO: make relative call when we are close enough
+    mov(cb, RAX, const_ptr_opnd(&rb_vm_getinstancevariable));
+    call(cb, RAX);
+
+    // Restore register we saved before the call
+    pop(cb, RSI);
+    pop(cb, RDI);
+
+    // Put the return value on top of the temporary stack
+    x86opnd_t stack_top = ctx_stack_push(ctx, 1);
+    mov(cb, stack_top, RAX);
+}
+
 bool
 rb_ujit_enabled_p(void)
 {
@@ -539,4 +577,5 @@ rb_ujit_init(void)
     st_insert(gen_fns, (st_data_t)BIN(setlocal_WC_0), (st_data_t)&gen_setlocal_wc0);
     st_insert(gen_fns, (st_data_t)BIN(opt_minus), (st_data_t)&gen_opt_minus);
     st_insert(gen_fns, (st_data_t)BIN(opt_send_without_block), (st_data_t)&gen_opt_send_without_block);
+    st_insert(gen_fns, (st_data_t)BIN(getinstancevariable), (st_data_t)&gen_getinstancevariable);
 }

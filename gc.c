@@ -551,9 +551,15 @@ struct RMoved {
 
 #define RMOVED(obj) ((struct RMoved *)(obj))
 
-struct RPayload {
+#define PAYLOAD_LENGTH(obj) (RANY(obj)->as.payload.head.length)
+
+typedef struct RPayloadHead {
     VALUE flags;
     unsigned short length;
+} rpayload_head_t;
+
+struct RPayload {
+    rpayload_head_t head;
 };
 
 #if defined(_MSC_VER) || defined(__CYGWIN__)
@@ -2399,7 +2405,7 @@ static int
 free_payload(rb_objspace_t *objspace, VALUE payload)
 {
     GC_ASSERT(BUILTIN_TYPE(payload) == T_PAYLOAD);
-    int length = RANY(payload)->as.payload.length;
+    int length = PAYLOAD_LENGTH(payload);
 
     struct heap_page *page = GET_HEAP_PAGE(payload);
 
@@ -2454,8 +2460,10 @@ newobj_init_payload(rb_objspace_t *objspace, VALUE obj, int length)
     RVALUE buf = {
         .as = {
             .payload =  {
-                .flags = T_PAYLOAD,
-                .length = length,
+                .head = {
+                    .flags = T_PAYLOAD,
+                    .length = length,
+                }
             },
         },
     };
@@ -3525,7 +3533,7 @@ objspace_each_objects_without_setup(rb_objspace_t *objspace, each_obj_callback *
             int type = BUILTIN_TYPE((VALUE)slot);
 
             if (type == T_PAYLOAD) {
-                slot += slot->as.payload.length;
+                slot += PAYLOAD_LENGTH(slot);
             } else if (type == T_NONE) {
                 GC_ASSERT(RFREE_HEAD_P((VALUE)slot));
                 slot += slot->as.free.as.head.size;
@@ -4067,7 +4075,7 @@ obj_slot_stride(VALUE obj)
         (short)NUM_IN_PAGE(next) < GET_PAGE_HEADER(obj)->page->total_slots &&
         BUILTIN_TYPE(next) == T_PAYLOAD)
     {
-        return RANY(next)->as.payload.length + 1;
+        return PAYLOAD_LENGTH(next);
     }
     asan_poison_object(next);
 
@@ -4747,8 +4755,8 @@ count_objects(int argc, VALUE *argv, VALUE os)
             }
 
             if (BUILTIN_TYPE((VALUE)p) == T_PAYLOAD) {
-                payload += p->as.payload.length;
-                p += p->as.payload.length;
+                payload += PAYLOAD_LENGTH(p);
+                p += PAYLOAD_LENGTH(p);
             } else {
                 p++;
             }
@@ -7272,7 +7280,7 @@ gc_verify_heap_page(rb_objspace_t *objspace, struct heap_page *page, VALUE obj)
 	}
 
         if (BUILTIN_TYPE(val) == T_PAYLOAD) {
-            i += RANY(val)->as.payload.length;
+            i += PAYLOAD_LENGTH(val);
         } else {
             i++;
         }

@@ -1038,6 +1038,7 @@ void jpe (codeblock_t* cb, size_t label_idx) { cb_write_jcc(cb, "jpe" , 0x0F, 0x
 void jpo (codeblock_t* cb, size_t label_idx) { cb_write_jcc(cb, "jpo" , 0x0F, 0x8B, label_idx); }
 void js  (codeblock_t* cb, size_t label_idx) { cb_write_jcc(cb, "js"  , 0x0F, 0x88, label_idx); }
 void jz  (codeblock_t* cb, size_t label_idx) { cb_write_jcc(cb, "jz"  , 0x0F, 0x84, label_idx); }
+void jmp (codeblock_t* cb, size_t label_idx) { cb_write_jcc(cb, "jmp" , 0xFF, 0xE9, label_idx); }
 
 /// jcc - relative jumps to a pointer (32-bit offset)
 void ja_ptr  (codeblock_t* cb, uint8_t* ptr) { cb_write_jcc_ptr(cb, "ja"  , 0x0F, 0x87, ptr); }
@@ -1077,18 +1078,6 @@ void jmp_rm(codeblock_t* cb, x86opnd_t opnd)
 {
     //cb.writeASM("jmp", opnd);
     cb_write_rm(cb, false, false, NO_OPND, opnd, 4, 1, 0xFF);
-}
-
-// jmp - Jump with relative 32-bit offset to a label
-void jmp (codeblock_t* cb, size_t label_idx) {
-    // Write the opcode
-    cb_write_byte(cb, 0xE9);
-
-    // Add a reference to the label
-    cb_label_ref(cb, label_idx);
-
-    // Relative 32-bit offset to be patched
-    cb_write_int(cb, 0, 32);
 }
 
 // jmp - Jump with relative 32-bit offset

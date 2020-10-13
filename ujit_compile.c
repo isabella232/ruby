@@ -1,12 +1,10 @@
 #include <assert.h>
 #include "insns.inc"
 #include "internal.h"
-#include "internal/class.h"
 #include "vm_core.h"
 #include "vm_callinfo.h"
 #include "builtin.h"
 #include "insns_info.inc"
-
 #include "ujit_compile.h"
 #include "ujit_asm.h"
 #include "ujit_utils.h"
@@ -510,98 +508,37 @@ VALUE rb_vm_getinstancevariable(VALUE obj, ID id, IVC ic); // in vm_insnhelper.c
 void
 gen_getinstancevariable(codeblock_t* cb, codeblock_t* ocb, ctx_t* ctx)
 {
-    uint8_t *side_exit = ujit_side_exit(ocb, ctx, ctx->pc);
-    x86opnd_t flags_opnd = mem_opnd(64, RDX, offsetof(struct RBasic, flags));
+    // getinstancevariable is not leaf, so write incremented PC before calling
+    // the instruction body which could raise an exception
+    mov(cb, RAX, const_ptr_opnd(ctx->pc + insn_len(BIN(getinstancevariable))));
+    mov(cb, mem_opnd(64, RDI, 0), RAX);
 
-    // RDX = self
-    mov(cb, RDX, mem_opnd(64, RDI, 24));
-    // Fallback if self is a special const
-    test(cb, RDX, imm_opnd(RUBY_IMMEDIATE_MASK));
-    jnz_ptr(cb, side_exit);
-    cmp(cb, RDX, imm_opnd(Qfalse)); // TODO could be `test rdx, rdx` since Qfalse is 0
-    je_ptr(cb, side_exit);
-    cmp(cb, RDX, imm_opnd(Qnil));
-    je_ptr(cb, side_exit);
+    VALUE id = ctx_get_arg(ctx, 0);
+    VALUE ivc = ctx_get_arg(ctx, 1); // TODO can IVC move? if so we should read this at run time
 
-    // RCX = RBASIC(self)->klass
-    mov(cb, RCX, mem_opnd(64, RDX, offsetof(struct RBasic, klass)));
-    // RCX = RCLASS_SERIAL(RCX)
-    mov(cb, RCX, mem_opnd(64, RCX, offsetof(struct RClass, class_serial)));
-    // R8 = ivc argument of the instruction
-    VALUE ivc = ctx_get_arg(ctx, 1);
-    mov(cb, R8, imm_opnd(ivc));
-    // R9 = ivc->ic_serial
-    mov(cb, R9, mem_opnd(64, R8, offsetof(struct iseq_inline_iv_cache_entry, ic_serial)));
-    // Fallback if ic->ic_serial != RCLASS_SERIAL(RBAISC(obj)->klass)
-    cmp(cb, RCX, R9);
-    jnz_ptr(cb, side_exit);
-    // RCX = RAX = RBAISC(self)->flags
-    mov(cb, RAX, flags_opnd);
-    mov(cb, RCX, RAX);
-    // RCX = flags & RUBY_T_MASK
-    and(cb, RAX, imm_opnd(RUBY_T_MASK)); // TODO there is no `and reg, imm64`
-    // Fallback if self is not T_OBJECT
-    cmp(cb, RAX, imm_opnd(T_OBJECT));
-    jnz_ptr(cb, side_exit);
-    // R9 = ivc->index
-    mov(cb, R9, mem_opnd(64, R8, offsetof(struct iseq_inline_iv_cache_entry, index)));
-    // Two code paths depending on whether self is ROBJECT_EMBED.
-    // See ROBJECT_NUMIV and ROBJECT_IVPTR.
-    size_t not_embed = cb_new_label(cb, "not_embed");
-    size_t check_and_push = cb_new_label(cb, "check_and_push");
-    test(cb, RCX, imm_opnd(ROBJECT_EMBED));
-    jz(cb, not_embed);
-    // When self is ROBJECT_EMBDED
-    //print_str(cb, "embed");
-    // Fallback if index >= ROBJECT_EMBED_LEN_MAX
-    cmp(cb, R9, imm_opnd(ROBJECT_EMBED_LEN_MAX));
-    jae_ptr(cb, side_exit);
-    // RAX = ROBJECT(self)->as.ary
-    lea(cb, RAX, mem_opnd(8, RDX, offsetof(struct RObject, as.ary)));
-    // Load the ivar from the array into RAX
-    x86mem_t load_mem = {
-        .base_reg_no = RAX.as.reg.reg_no,
-        .idx_reg_no = R9.as.reg.reg_no,
-        .scale_exp = 3,
-        .has_idx = true
-    };
-    x86opnd_t load_opnd = { OPND_MEM, 64, .as.mem = load_mem };
-    mov(cb, RAX, load_opnd);
-    jmp(cb, check_and_push);
-    // When self is not ROBJECT_EMBED
-    cb_write_label(cb, not_embed);
-    //print_str(cb, "not embed");
-    // RAX = ROBJECT(self)->as.heap.numiv. as.heap.numiv is a uint32_t
-    mov(cb, EAX, mem_opnd(32, RDX, offsetof(struct RObject, as.heap.numiv)));
-    // Fallback if index >= as.heap.numiv
-    cmp(cb, R9, RAX);
-    jae_ptr(cb, side_exit);
-    // RAX = ROBJECT(self)->as.heap.ivptr
-    mov(cb, RAX, mem_opnd(64, RDX, offsetof(struct RObject, as.heap.ivptr)));
-    // Load the ivar from the array into RAX
-    mov(cb, RAX, load_opnd);
+    // Prepare to making a function call. Preserve cfp and vm stack pointer
+    push(cb, RDI);
+    push(cb, RSI);
 
-    cb_write_label(cb, check_and_push);
-    // Handle falling back to possibly issue warning when ivar == Qundef
-    cmp(cb, RAX, imm_opnd(Qundef));
-    size_t push_ivar = cb_new_label(cb, "push_ivar");
-    jne(cb, push_ivar);
-    // RDX = ruby_verbose
-    mov(cb, RDX, const_ptr_opnd(&ruby_verbose));
-    mov(cb, RDX, mem_opnd(64, RDX, 0));
-    // Fallback if ruby_verbose neither Qfalse nor Qnil
-    cmp(cb, RDX, imm_opnd(0)); // TODO this could be `test rdx, rdx`
-    jz(cb, push_ivar);
-    cmp(cb, RDX, imm_opnd(Qnil));
-    //print_str(cb, "verbose check, not false");
-    jne_ptr(cb, side_exit);
+    // Setup arguments
+    // First argument is self
+    mov(cb, RDI, mem_opnd(64, RDI, 24));
+    // Second argument is id
+    mov(cb, RSI, imm_opnd(id));
+    // Third argument is ivc
+    mov(cb, RDX, imm_opnd(ivc));
 
-    // Push the ivar onto the stack
-    cb_write_label(cb, push_ivar);
+    // Make indirect call. TODO: make relative call when we are close enough
+    mov(cb, RAX, const_ptr_opnd(&rb_vm_getinstancevariable));
+    call(cb, RAX);
+
+    // Restore register we saved before the call
+    pop(cb, RSI);
+    pop(cb, RDI);
+
+    // Put the return value on top of the temporary stack
     x86opnd_t stack_top = ctx_stack_push(ctx, 1);
     mov(cb, stack_top, RAX);
-
-    cb_link_labels(cb);
 }
 
 bool

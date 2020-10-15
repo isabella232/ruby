@@ -252,6 +252,7 @@ void add(codeblock_t* cb, x86opnd_t opnd0, x86opnd_t opnd1);
 void and(codeblock_t* cb, x86opnd_t opnd0, x86opnd_t opnd1);
 void call_label(codeblock_t* cb, size_t label_idx);
 void call(codeblock_t* cb, x86opnd_t opnd);
+void call_ptr(codeblock_t* cb, uint8_t *callee);
 void cmova(codeblock_t* cb, x86opnd_t dst, x86opnd_t src);
 void cmovae(codeblock_t* cb, x86opnd_t dst, x86opnd_t src);
 void cmovb(codeblock_t* cb, x86opnd_t dst, x86opnd_t src);

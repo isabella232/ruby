@@ -837,6 +837,20 @@ void call_label(codeblock_t* cb, size_t label_idx)
     cb_write_int(cb, 0, 32);
 }
 
+/// call - Call to address with 32-bit offset
+void call_ptr(codeblock_t *cb, uint8_t *callee)
+{
+    // Compute offset from past the end of the instruction
+    ptrdiff_t offset = callee - cb_get_ptr(cb, cb->write_pos + 5);
+    int32_t offset_i32 = (int32_t)offset;
+    assert(offset_i32 == offset);
+
+    // Write the opcode
+    cb_write_byte(cb, 0xE8);
+    // Write the offset
+    cb_write_int(cb, (uint64_t)offset_i32, 32);
+}
+
 /// call - Indirect call with an R/M operand
 void call(codeblock_t* cb, x86opnd_t opnd)
 {

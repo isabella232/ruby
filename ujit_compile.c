@@ -505,37 +505,52 @@ void gen_opt_send_without_block(codeblock_t* cb, codeblock_t* ocb, ctx_t* ctx)
 
 VALUE rb_vm_getinstancevariable(VALUE obj, ID id, IVC ic); // in vm_insnhelper.c
 
+static uint8_t *getivar_routine;
+
+static void
+gen_getivar_routine(codeblock_t* cb)
+{
+    uint8_t* code_ptr = cb_get_ptr(cb, cb->write_pos);
+
+    // getinstancevariable is not leaf, so write incremented PC before calling
+    // the instruction body which could raise an exception.
+    // Callers of this routine pass the incremented PC in RAX
+    mov(cb, mem_opnd(64, RDI, 0), RAX);
+
+    // Prepare to make a function call. Preserve cfp and vm stack pointer
+    sub(cb, RSP, imm_opnd(24)); // align RSP to 16 to meet calling convention requirement
+    mov(cb, mem_opnd(64, RSP, 0), RSI);
+    mov(cb, mem_opnd(64, RSP, 8), RDI);
+
+    // Setup arguments
+    // First argument is self
+    mov(cb, RDI, mem_opnd(64, RDI, 24));
+    // Second argument is id
+    mov(cb, RSI, mem_opnd(64, RAX, -insn_len(BIN(getinstancevariable)) * 8 + 8));
+    // Third argument is ivc
+    mov(cb, RDX, mem_opnd(64, RAX, -insn_len(BIN(getinstancevariable)) * 8 + 16));
+
+    // Make indirect call. TODO: make relative call when we are close enough
+    mov(cb, RAX, const_ptr_opnd(&rb_vm_getinstancevariable));
+    call(cb, RAX);
+
+    // Restore register saved before the call
+    mov(cb, RSI, mem_opnd(64, RSP, 0));
+    mov(cb, RDI, mem_opnd(64, RSP, 8));
+    add(cb, RSP, imm_opnd(24));
+
+    ret(cb);
+
+    getivar_routine = code_ptr;
+}
+
 void
 gen_getinstancevariable(codeblock_t* cb, codeblock_t* ocb, ctx_t* ctx)
 {
     // getinstancevariable is not leaf, so write incremented PC before calling
     // the instruction body which could raise an exception
     mov(cb, RAX, const_ptr_opnd(ctx->pc + insn_len(BIN(getinstancevariable))));
-    mov(cb, mem_opnd(64, RDI, 0), RAX);
-
-    VALUE id = ctx_get_arg(ctx, 0);
-    VALUE ivc = ctx_get_arg(ctx, 1); // TODO can IVC move? if so we should read this at run time
-
-    // Prepare to making a function call. Preserve cfp and vm stack pointer
-    push(cb, RDI);
-    push(cb, RSI);
-
-    // Setup arguments
-    // First argument is self
-    mov(cb, RDI, mem_opnd(64, RDI, 24));
-    // Second argument is id
-    mov(cb, RSI, imm_opnd(id));
-    // Third argument is ivc
-    mov(cb, RDX, imm_opnd(ivc));
-
-    // Make indirect call. TODO: make relative call when we are close enough
-    mov(cb, RAX, const_ptr_opnd(&rb_vm_getinstancevariable));
-    call(cb, RAX);
-
-    // Restore register we saved before the call
-    pop(cb, RSI);
-    pop(cb, RDI);
-
+    call_ptr(cb, getivar_routine);
     // Put the return value on top of the temporary stack
     x86opnd_t stack_top = ctx_stack_push(ctx, 1);
     mov(cb, stack_top, RAX);
@@ -560,6 +575,8 @@ rb_ujit_init(void)
     cb_init(cb, mem_block, mem_size/2);
     ocb = &outline_block;
     cb_init(ocb, mem_block + mem_size/2, mem_size/2);
+
+    gen_getivar_routine(cb);
 
     // Initialize the codegen function table
     gen_fns = rb_st_init_numtable();

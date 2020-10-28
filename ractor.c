@@ -1870,10 +1870,9 @@ obj_traverse_i(VALUE obj, struct obj_traverse_data *data)
       case T_OBJECT:
         {
             uint32_t len = ROBJECT_NUMIV(obj);
-            VALUE *ptr = ROBJECT_IVPTR(obj);
 
             for (uint32_t i=0; i<len; i++) {
-                VALUE val = ptr[i];
+                VALUE val = ROBJECT_IVPTR(obj, i);
                 if (val != Qundef && obj_traverse_i(val, data)) return 1;
             }
         }

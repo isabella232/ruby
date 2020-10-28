@@ -55,7 +55,6 @@ struct RObject {
         struct {
             uint32_t numiv;
             VALUE *ivptr;
-            struct st_table *iv_index_tbl; /* shortcut for RCLASS_IV_INDEX_TBL(rb_obj_class(obj)) */
         } heap;
         VALUE ary[ROBJECT_EMBED_LEN_MAX];
     } as;
@@ -78,19 +77,51 @@ ROBJECT_NUMIV(VALUE obj)
 
 RBIMPL_ATTR_PURE_UNLESS_DEBUG()
 RBIMPL_ATTR_ARTIFICIAL()
-static inline VALUE *
-ROBJECT_IVPTR(VALUE obj)
+static inline void
+ROBJECT_NUMIV_SET(VALUE obj, uint32_t numiv)
+{
+    RBIMPL_ASSERT_TYPE(obj, RUBY_T_OBJECT);
+
+    if (!RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
+        ROBJECT(obj)->as.heap.numiv = numiv;
+    }
+}
+
+RBIMPL_ATTR_PURE_UNLESS_DEBUG()
+RBIMPL_ATTR_ARTIFICIAL()
+static inline VALUE
+ROBJECT_IVPTR(VALUE obj, uint32_t idx)
 {
     RBIMPL_ASSERT_TYPE(obj, RUBY_T_OBJECT);
 
     struct RObject *const ptr = ROBJECT(obj);
 
     if (RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
-        return ptr->as.ary;
+        return ptr->as.ary[idx];
     }
     else {
-        return ptr->as.heap.ivptr;
+        return ptr->as.heap.ivptr[idx];
     }
+}
+
+RBIMPL_ATTR_PURE_UNLESS_DEBUG()
+RBIMPL_ATTR_ARTIFICIAL()
+static inline void
+ROBJECT_IV_SET(VALUE obj, uint32_t idx, VALUE val)
+{
+    RBIMPL_ASSERT_TYPE(obj, RUBY_T_OBJECT);
+
+    struct RObject *const ptr = ROBJECT(obj);
+    VALUE *ivs;
+
+    if (RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
+        ivs = ptr->as.ary;
+    }
+    else {
+        ivs = ptr->as.heap.ivptr;
+    }
+
+    RB_OBJ_WRITE(obj, &ivs[idx], val);
 }
 
 #endif /* RBIMPL_ROBJECT_H */

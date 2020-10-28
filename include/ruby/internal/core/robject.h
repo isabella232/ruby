@@ -70,7 +70,7 @@ ROBJECT_NUMIV(VALUE obj)
         return ROBJECT_EMBED_LEN_MAX;
     }
     else {
-        return (uint32_t)NUM2INT(ROBJECT(obj)->as.heap.ivptr[0]);
+        return (uint32_t)ROBJECT(obj)->as.heap.ivptr[0];
     }
 }
 
@@ -82,7 +82,7 @@ ROBJECT_NUMIV_SET(VALUE obj, uint32_t numiv)
     RBIMPL_ASSERT_TYPE(obj, RUBY_T_OBJECT);
 
     if (!RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
-        ROBJECT(obj)->as.heap.ivptr[0] = INT2NUM(numiv);
+        ROBJECT(obj)->as.heap.ivptr[0] = (VALUE)numiv;
     }
 }
 

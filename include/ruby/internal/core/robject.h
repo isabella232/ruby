@@ -95,7 +95,7 @@ ROBJECT_IVPTR(VALUE obj, uint32_t idx)
 
     struct RObject *const ptr = ROBJECT(obj);
 
-    if (RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
+    if (idx < ROBJECT_EMBED_LEN_MAX) {
         return ptr->as.ary[idx];
     }
     else {
@@ -114,7 +114,7 @@ ROBJECT_IV_SET(VALUE obj, uint32_t idx, VALUE val)
     struct RObject *const ptr = ROBJECT(obj);
     VALUE *ivs;
 
-    if (RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
+    if (idx < ROBJECT_EMBED_LEN_MAX) {
         ivs = ptr->as.ary;
         RB_OBJ_WRITE(obj, &ivs[idx], val);
     }

@@ -335,8 +335,8 @@ rb_obj_copy_ivar(VALUE dest, VALUE obj)
 	uint32_t len = ROBJECT_NUMIV(obj);
 	VALUE *ptr = 0;
 	if (len > 0) {
-	    ptr = ALLOC_N(VALUE, len);
-	    MEMCPY(ptr, ROBJECT(obj)->as.heap.ivptr, VALUE, len);
+	    ptr = ALLOC_N(VALUE, len + 1);
+	    MEMCPY(ptr, ROBJECT(obj)->as.heap.ivptr, VALUE, len + 1);
 	}
 	ROBJECT(dest)->as.heap.ivptr = ptr;
         ROBJECT_NUMIV_SET(dest, len);

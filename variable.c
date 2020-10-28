@@ -1388,13 +1388,13 @@ rb_obj_transient_heap_evacuate(VALUE obj, int promote)
         VALUE *new_ptr;
 
         if (promote) {
-            new_ptr = ALLOC_N(VALUE, len);
+            new_ptr = ALLOC_N(VALUE, len + 1);
             ROBJ_TRANSIENT_UNSET(obj);
         }
         else {
-            new_ptr = obj_ivar_heap_alloc(obj, len);
+            new_ptr = obj_ivar_heap_alloc(obj, len + 1);
         }
-        MEMCPY(new_ptr, old_ptr, VALUE, len);
+        MEMCPY(new_ptr, old_ptr, VALUE, len + 1);
         ROBJECT(obj)->as.heap.ivptr = new_ptr;
     }
 }
@@ -1430,15 +1430,16 @@ obj_ivar_set(VALUE obj, ID id, VALUE val)
 
             if (RBASIC(obj)->flags & ROBJECT_EMBED) {
                 VALUE *ptr = ROBJECT(obj)->as.ary;
-                newptr = obj_ivar_heap_alloc(obj, newsize);
-                MEMCPY(newptr, ptr, VALUE, len);
+                newptr = obj_ivar_heap_alloc(obj, newsize + 1);
+                MEMCPY(newptr + 1, ptr, VALUE, len);
                 RBASIC(obj)->flags &= ~ROBJECT_EMBED;
                 ROBJECT(obj)->as.heap.ivptr = newptr;
             }
             else {
-                newptr = obj_ivar_heap_realloc(obj, len, newsize);
+                newptr = obj_ivar_heap_realloc(obj, len + 1, newsize + 1);
             }
 
+            newptr++;
             for (; len < newsize; len++) {
                 newptr[len] = Qundef;
             }

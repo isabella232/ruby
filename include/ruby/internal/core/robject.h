@@ -53,7 +53,6 @@ struct RObject {
     struct RBasic basic;
     union {
         struct {
-            uint32_t numiv;
             VALUE *ivptr;
         } heap;
         VALUE ary[ROBJECT_EMBED_LEN_MAX];
@@ -71,7 +70,7 @@ ROBJECT_NUMIV(VALUE obj)
         return ROBJECT_EMBED_LEN_MAX;
     }
     else {
-        return ROBJECT(obj)->as.heap.numiv;
+        return (uint32_t)NUM2INT(ROBJECT(obj)->as.heap.ivptr[0]);
     }
 }
 
@@ -83,7 +82,7 @@ ROBJECT_NUMIV_SET(VALUE obj, uint32_t numiv)
     RBIMPL_ASSERT_TYPE(obj, RUBY_T_OBJECT);
 
     if (!RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
-        ROBJECT(obj)->as.heap.numiv = numiv;
+        ROBJECT(obj)->as.heap.ivptr[0] = INT2NUM(numiv);
     }
 }
 
@@ -100,7 +99,7 @@ ROBJECT_IVPTR(VALUE obj, uint32_t idx)
         return ptr->as.ary[idx];
     }
     else {
-        return ptr->as.heap.ivptr[idx];
+        return ptr->as.heap.ivptr[idx + 1];
     }
 }
 
@@ -111,17 +110,18 @@ ROBJECT_IV_SET(VALUE obj, uint32_t idx, VALUE val)
 {
     RBIMPL_ASSERT_TYPE(obj, RUBY_T_OBJECT);
 
+
     struct RObject *const ptr = ROBJECT(obj);
     VALUE *ivs;
 
     if (RB_FL_ANY_RAW(obj, ROBJECT_EMBED)) {
         ivs = ptr->as.ary;
+        RB_OBJ_WRITE(obj, &ivs[idx], val);
     }
     else {
         ivs = ptr->as.heap.ivptr;
+        RB_OBJ_WRITE(obj, &ivs[idx + 1], val);
     }
-
-    RB_OBJ_WRITE(obj, &ivs[idx], val);
 }
 
 #endif /* RBIMPL_ROBJECT_H */

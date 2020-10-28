@@ -45,17 +45,17 @@
 
 enum ruby_robject_flags { ROBJECT_EMBED = RUBY_FL_USER1 };
 
-enum ruby_robject_consts { ROBJECT_EMBED_LEN_MAX = RBIMPL_EMBED_LEN_MAX_OF(VALUE) };
+enum ruby_robject_consts { ROBJECT_EMBED_LEN_MAX = (RBIMPL_EMBED_LEN_MAX_OF(VALUE) - 1) };
 
 struct st_table;
 
 struct RObject {
     struct RBasic basic;
-    union {
+    struct {
+        VALUE ary[ROBJECT_EMBED_LEN_MAX];
         struct {
             VALUE *ivptr;
         } heap;
-        VALUE ary[ROBJECT_EMBED_LEN_MAX];
     } as;
 };
 

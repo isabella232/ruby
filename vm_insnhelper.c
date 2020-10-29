@@ -1215,7 +1215,7 @@ vm_setivar(VALUE obj, ID id, VALUE val, const rb_iseq_t *iseq, IVC ic, const str
             ( is_attr && RB_DEBUG_COUNTER_INC_UNLESS(ivar_set_ic_miss_unset, vm_cc_attr_index(cc) > 0)))) {
 	    index = !is_attr ? ic->entry->index : vm_cc_attr_index(cc)-1;
 
-	    if (RB_DEBUG_COUNTER_INC_UNLESS(ivar_set_ic_miss_oorange, index < ROBJECT_NUMIV(obj))) {
+	    if (RB_DEBUG_COUNTER_INC_UNLESS(ivar_set_ic_miss_oorange, (index < ROBJECT_EMBED_LEN_MAX || index < ROBJECT_NUMIV(obj)))) {
                 ROBJECT_IV_SET(obj, index, val);
 		RB_DEBUG_COUNTER_INC(ivar_set_ic_hit);
 		return val; /* inline cache hit */
